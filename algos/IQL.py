@@ -5,7 +5,10 @@ sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 from typing import List, Optional, Tuple
 
-import d4rl
+try:
+    import d4rl
+except ImportError:
+    pass
 import numpy as np
 import torch
 import torch.nn as nn

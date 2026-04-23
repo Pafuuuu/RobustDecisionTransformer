@@ -4,6 +4,23 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from typing import Any, DefaultDict, Dict, List, Optional, Tuple
 import gym
 import numpy as np
+
+# D4RL normalization bounds (random_score, expert_score) per environment family
+_D4RL_SCORE_BOUNDS = {
+    "walker2d":    (1.629,     4592.3),
+    "hopper":      (20.272,    3234.3),
+    "halfcheetah": (-280.179,  12135.0),
+    "kitchen":     (0.0,       4.0),
+    "door":        (-1.0,      2694.0),
+    "hammer":      (2.657,     12794.134),
+    "relocate":    (-6.425,    4233.877),
+    "pen":         (23.853,    3076.833),
+}
+
+def get_normalized_score(env_name: str, raw_returns: np.ndarray) -> np.ndarray:
+    key = env_name.split("-")[0]
+    lo, hi = _D4RL_SCORE_BOUNDS[key]
+    return (raw_returns - lo) / (hi - lo)
 import torch
 import torch.nn as nn
 
@@ -187,7 +204,8 @@ def eval_rollout(
     time_steps = torch.arange(model.episode_len, dtype=torch.long, device=device)
     time_steps = time_steps.view(1, -1)
 
-    obs = env.reset()
+    reset_result = env.reset()
+    obs = reset_result[0] if isinstance(reset_result, tuple) else reset_result
     if attacker is not None:
         obs = attacker.attack_obs(obs)
     states[:, 0] = torch.as_tensor(obs, device=device)
@@ -208,7 +226,12 @@ def eval_rollout(
         predicted_actions = predicted[0]
         predicted_action = predicted_actions[0, -1].cpu().numpy()
         predicted_action = np.clip(predicted_action, *action_range)
-        next_state, reward, done, info = env.step(predicted_action)
+        step_result = env.step(predicted_action)
+        if len(step_result) == 5:
+            next_state, reward, terminated, truncated, info = step_result
+            done = terminated or truncated
+        else:
+            next_state, reward, done, info = step_result
         if attacker is not None:
             next_state = attacker.attack_obs(next_state)
         # at step t, we predict a_t, get s_{t + 1}, r_{t + 1}
@@ -240,7 +263,7 @@ def eval_fn(config, env, model, attacker=None):
             eval_returns.append(eval_return / config.reward_scale)
 
         eval_returns = np.array(eval_returns)
-        normalized_score = env.get_normalized_score(eval_returns) * 100
+        normalized_score = get_normalized_score(config.env, eval_returns) * 100
         eval_log.update({
             f"eval/{target_return}_reward_mean": np.mean(eval_returns),
             f"eval/{target_return}_reward_std": np.std(eval_returns),

@@ -12,6 +12,16 @@ try:
 except ImportError:
     pass
 import gym
+try:
+    import gymnasium
+    GYM_ENV_ID = {
+        "walker2d":    "Walker2d-v4",
+        "hopper":      "Hopper-v4",
+        "halfcheetah": "HalfCheetah-v4",
+    }
+except ImportError:
+    gymnasium = None
+    GYM_ENV_ID = {}
 import numpy as np
 import pyrallis
 import torch
@@ -205,14 +215,15 @@ class TrainConfig:
             self.recalculate_return = True
         # evaluation
         if self.eval_only:
-            corruption_tag = ""
-            if self.corruption_obs > 0: corruption_tag += "obs_"
-            if self.corruption_act > 0: corruption_tag += "act_"
-            if self.corruption_rew > 0: corruption_tag += "rew_"
-            for file_name in os.listdir(os.path.join(self.logdir, self.group, self.env)):
-                if f"{corruption_tag}{self.seed}_" in file_name:
-                    self.checkpoint_dir = os.path.join(self.logdir, self.group, self.env, file_name)
-                    break
+            if self.checkpoint_dir is None:
+                corruption_tag = ""
+                if self.corruption_obs > 0: corruption_tag += "obs_"
+                if self.corruption_act > 0: corruption_tag += "act_"
+                if self.corruption_rew > 0: corruption_tag += "rew_"
+                for file_name in os.listdir(os.path.join(self.logdir, self.group, self.env)):
+                    if f"{corruption_tag}{self.seed}_" in file_name:
+                        self.checkpoint_dir = os.path.join(self.logdir, self.group, self.env, file_name)
+                        break
             with open(os.path.join(self.checkpoint_dir, "params.json"), "r") as f:
                 config = json.load(f)
             unoverwritten_keys = ["n_episodes", "checkpoint_dir"]
@@ -224,7 +235,10 @@ class TrainConfig:
                         pass
                     self.__dict__[key] = value
                     print(f"Set {key} to {value}")
-            self.n_episodes = 100
+            # n_episodes is in unoverwritten_keys so it keeps the command-line value;
+            # default to 100 only if still at the dataclass default of 10
+            if self.n_episodes == 10:
+                self.n_episodes = 100
 
 
 def set_model(config: TrainConfig):
@@ -444,31 +458,38 @@ def test(config: TrainConfig, logger: Logger):
     # Set seeds
     func.set_seed(config.seed)
 
-    env = gym.make(config.env)
-    config.state_dim = env.observation_space.shape[0]
-    config.action_dim = env.action_space.shape[0]
-    config.max_action = float(env.action_space.high[0])
-    config.action_range = [
-            float(env.action_space.low.min()) + 1e-6,
-            float(env.action_space.high.max()) - 1e-6,
-    ]
+    dims = ENV_DIMS[config.env]
+    config.state_dim = dims["state_dim"]
+    config.action_dim = dims["action_dim"]
+    config.max_action = dims["max_action"]
+    config.action_range = [-dims["max_action"] + 1e-6, dims["max_action"] - 1e-6]
 
-    # data & dataloader setup
+    # data & dataloader setup (loads .pt file, no gym needed)
     dataset = dt_func.SequenceDataset(config, logger)
     logger.info(f"Dataset: {len(dataset.dataset)} trajectories")
     logger.info(f"State mean: {dataset.state_mean}, std: {dataset.state_std}")
 
-    env = func.wrap_env(
-        env,
-        state_mean=dataset.state_mean,
-        state_std=dataset.state_std,
-        reward_scale=config.reward_scale,
-    )
-    env.seed(config.seed)
+    gym_id = GYM_ENV_ID[config.env.split("-")[0]]
+    env = gymnasium.make(gym_id)
+
+    state_mean = dataset.state_mean
+    state_std = dataset.state_std
+    reward_scale = config.reward_scale
+
+    class _NormEnv(gymnasium.Wrapper):
+        def reset(self, **kwargs):
+            obs, info = self.env.reset(**kwargs)
+            return (obs - state_mean) / state_std, info
+        def step(self, action):
+            obs, reward, term, trunc, info = self.env.step(action)
+            return (obs - state_mean) / state_std, reward * reward_scale, term, trunc, info
+
+    env = _NormEnv(env)
+    env.reset(seed=config.seed)
 
     # model
     model = set_model(config)
-    model.load_state_dict(torch.load(os.path.join(config.checkpoint_dir, "100.pt")))
+    model.load_state_dict(torch.load(os.path.join(config.checkpoint_dir, "100.pt"), weights_only=False))
     model.eval()
     logger.info(f"Network: \n{str(model)}")
     logger.info(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
