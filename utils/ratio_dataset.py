@@ -1,6 +1,5 @@
 import os
-import gym
-import d4rl
+import h5py
 import torch
 import random
 import numpy as np
@@ -12,7 +11,8 @@ def ratio_dataset(dataset_path, env_name, ratio):
     np.random.seed(1234)
 
     h5path = os.path.expanduser(f"{dataset_path}/{env_name}.hdf5")
-    dataset = gym.make(env_name).get_dataset(h5path=h5path)
+    with h5py.File(h5path, 'r') as f:
+        dataset = {k: f[k][:] for k in ['observations', 'actions', 'rewards', 'terminals', 'timeouts']}
 
     traj, traj_len = [], []
     data_ = defaultdict(list)

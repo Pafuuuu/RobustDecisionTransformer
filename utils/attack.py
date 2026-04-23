@@ -6,7 +6,10 @@ from typing import Dict
 
 import copy
 import gym
-import d4rl
+try:
+    import d4rl
+except ImportError:
+    pass
 import torch
 import numpy as np
 import pytorch_util as ptu

@@ -40,7 +40,7 @@ def load_d4rl_trajectories(
 ) -> Tuple[List[DefaultDict[str, np.ndarray]], Dict[str, Any]]:
     if config.sample_ratio < 1.0:
         dataset_path = os.path.join(config.dataset_path, "original", f"{env_name}_ratio_{config.sample_ratio}.pt")
-        dataset = torch.load(dataset_path)
+        dataset = torch.load(dataset_path, weights_only=False)
     else:
         h5path = (
             config.dataset_path
