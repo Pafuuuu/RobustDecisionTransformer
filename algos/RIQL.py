@@ -12,8 +12,11 @@ import os
 import wandb
 import traceback
 import pyrallis
-import d4rl
-import gym
+try:
+    import d4rl
+except ImportError:
+    pass
+import gymnasium
 import math
 import numpy as np
 import torch
@@ -27,6 +30,30 @@ from tqdm import trange
 from utils.logger import init_logger, Logger
 from utils.attack import attack_dataset, Evaluation_Attacker
 from utils.networks import MLP
+
+GYM_ENV_ID = {
+    "walker2d":    "Walker2d-v4",
+    "hopper":      "Hopper-v4",
+    "halfcheetah": "HalfCheetah-v4",
+}
+
+ENV_DIMS = {
+    "walker2d-medium-replay-v2":    {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "hopper-medium-replay-v2":      {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
+    "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+}
+
+
+def qlearning_dataset(dataset):
+    """Convert trajectory dataset to Q-learning transitions (replaces d4rl.qlearning_dataset)."""
+    N = dataset["rewards"].shape[0]
+    return {
+        "observations":      dataset["observations"][:N-1].astype(np.float32),
+        "actions":           dataset["actions"][:N-1].astype(np.float32),
+        "next_observations": dataset["observations"][1:N].astype(np.float32),
+        "rewards":           dataset["rewards"][:N-1].astype(np.float32),
+        "terminals":         np.zeros(N - 1, dtype=np.float32),
+    }
 
 TensorBatch = List[torch.Tensor]
 
@@ -207,10 +234,11 @@ class TrainConfig:
             if self.corruption_obs > 0: corruption_tag += "obs_"
             if self.corruption_act > 0: corruption_tag += "act_"
             if self.corruption_rew > 0: corruption_tag += "rew_"
-            for file_name in os.listdir(os.path.join(self.logdir, self.group, self.env)):
-                if f"{corruption_tag}{self.seed}_" in file_name:
-                    self.checkpoint_dir = os.path.join(self.logdir, self.group, self.env, file_name)
-                    break
+            if self.checkpoint_dir is None:
+                for file_name in os.listdir(os.path.join(self.logdir, self.group, self.env)):
+                    if f"{corruption_tag}{self.seed}_" in file_name:
+                        self.checkpoint_dir = os.path.join(self.logdir, self.group, self.env, file_name)
+                        break
             with open(os.path.join(self.checkpoint_dir, "params.json"), "r") as f:
                 config = json.load(f)
             unoverwritten_keys = ["eval_episodes", "checkpoint_dir"]
@@ -241,25 +269,20 @@ def normalize_states(states: np.ndarray, mean: np.ndarray, std: np.ndarray):
 
 
 def wrap_env(
-    env: gym.Env,
+    env,
     state_mean: Union[np.ndarray, float] = 0.0,
     state_std: Union[np.ndarray, float] = 1.0,
     reward_scale: float = 1.0,
-) -> gym.Env:
-    # PEP 8: E731 do not assign a lambda expression, use a def
-    def normalize_state(state):
-        return (
-            state - state_mean
-        ) / state_std  # epsilon should be already added in std.
-
-    def scale_reward(reward):
-        # Please be careful, here reward is multiplied by scale!
-        return reward_scale * reward
-
-    env = gym.wrappers.TransformObservation(env, normalize_state)
-    if reward_scale != 1.0:
-        env = gym.wrappers.TransformReward(env, scale_reward)
-    return env
+):
+    _mean, _std, _scale = state_mean, state_std, reward_scale
+    class _NormEnv(gymnasium.Wrapper):
+        def reset(self, **kwargs):
+            obs, info = self.env.reset(**kwargs)
+            return (obs - _mean) / _std, info
+        def step(self, action):
+            obs, reward, terminated, truncated, info = self.env.step(action)
+            return (obs - _mean) / _std, reward * _scale, terminated, truncated, info
+    return _NormEnv(env)
 
 
 class ReplayBuffer:
@@ -769,28 +792,27 @@ def train(config: TrainConfig, logger: Logger):
     func.set_seed(config.seed)
     if config.use_wandb:
         func.wandb_init(config)
-    env = gym.make(config.env)
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    max_action = float(env.action_space.high[0])
+
+    dims = ENV_DIMS[config.env]
+    state_dim = dims["state_dim"]
+    action_dim = dims["action_dim"]
+    max_action = dims["max_action"]
 
     if config.sample_ratio < 1.0:
         dataset_path = os.path.join(config.dataset_path, "original", f"{config.env}_ratio_{config.sample_ratio}.pt")
-        dataset = torch.load(dataset_path)
+        dataset = torch.load(dataset_path, weights_only=False)
     else:
-        h5path = (
-            config.dataset_path
-            if config.dataset_path is None
-            else os.path.expanduser(f"{config.dataset_path}/{config.env}.hdf5")
-        )
-        dataset = env.get_dataset(h5path=h5path)
+        h5path = os.path.expanduser(f"{config.dataset_path}/{config.env}.hdf5")
+        import h5py
+        with h5py.File(h5path, "r") as _f:
+            dataset = {k: _f[k][()] for k in _f.keys()}
 
     ##### corrupt
     attack_indexes = np.zeros(dataset["rewards"].shape)
     if config.corruption_mode != "none":
         dataset, indexes = attack_dataset(config, dataset, logger)
         attack_indexes[indexes] = 1.0
-    dataset = d4rl.qlearning_dataset(env, dataset, terminate_on_end=True)
+    dataset = qlearning_dataset(dataset)
 
     if config.normalize_reward:
         modify_reward(dataset, config.env)
@@ -805,8 +827,8 @@ def train(config: TrainConfig, logger: Logger):
     else:
         state_mean, state_std = 0, 1
 
-    logger.info("state mean: ", state_mean)
-    logger.info("state std: ", state_std)
+    logger.info(f"state mean: {state_mean}")
+    logger.info(f"state std: {state_std}")
 
     dataset["observations"] = normalize_states(
         dataset["observations"], state_mean, state_std
@@ -814,9 +836,6 @@ def train(config: TrainConfig, logger: Logger):
     dataset["next_observations"] = normalize_states(
         dataset["next_observations"], state_mean, state_std
     )
-
-    env = wrap_env(env, state_mean=state_mean, state_std=state_std)
-    env.seed(config.seed)
 
     replay_buffer = ReplayBuffer(
         state_dim,
@@ -872,14 +891,6 @@ def train(config: TrainConfig, logger: Logger):
     # Initialize actor
     trainer = ImplicitQLearning(**kwargs)
 
-    eval_log = func.eval(config, env, actor)
-    logger.record("epoch", 0)
-    for k, v in eval_log.items():
-        logger.record(k, v)
-    logger.dump(0)
-    if config.use_wandb:
-        wandb.log({"epoch": 0, **eval_log})
-
     best_reward = -np.inf
     total_updates = 0.0
     for epoch in trange(1, config.num_epochs + 1, desc="Training"):
@@ -892,33 +903,16 @@ def train(config: TrainConfig, logger: Logger):
         time_end = time.time()
         epoch_time = time_end - time_start
 
-        # Evaluate episode
-        if epoch % config.eval_every == 0:  #  or epoch == config.num_epochs - 1:
-            eval_log = func.eval(config, env, actor)
+        if epoch % config.eval_every == 0:
             logger.record("epoch", epoch)
             logger.record("epoch_time", epoch_time)
-            for k, v in eval_log.items():
-                logger.record(k, v)
             for k, v in log_dict.items():
                 logger.record(f"update/{k}", v)
             logger.record("update/gradient_step", total_updates)
             logger.dump(epoch)
-
             if config.use_wandb:
                 update_log = {f"update/{k}": v for k, v in log_dict.items()}
                 wandb.log({"epoch": epoch, **update_log})
-                wandb.log({"epoch": epoch, **eval_log})
-
-            now_reward = eval_log["eval/reward_mean"]
-            if now_reward > best_reward and config.save_model:
-                best_reward = now_reward
-                torch.save(
-                    trainer.state_dict(),
-                    os.path.join(logger.get_dir(), f"policy_best.pth"),
-                )
-                logger.info(
-                    f"Save policy on epoch {epoch} for best reward {best_reward}."
-                )
 
         if epoch % 500 == 0 and config.save_model:
             torch.save(
@@ -933,30 +927,27 @@ def train(config: TrainConfig, logger: Logger):
 
 def test(config: TrainConfig, logger: Logger):
     func.set_seed(config.seed)
-    # Set seeds
-    env = gym.make(config.env)
 
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    max_action = float(env.action_space.high[0])
+    dims = ENV_DIMS[config.env]
+    state_dim = dims["state_dim"]
+    action_dim = dims["action_dim"]
+    max_action = dims["max_action"]
 
     if config.sample_ratio < 1.0:
         dataset_path = os.path.join(config.dataset_path, "original", f"{config.env}_ratio_{config.sample_ratio}.pt")
-        dataset = torch.load(dataset_path)
+        dataset = torch.load(dataset_path, weights_only=False)
     else:
-        h5path = (
-            config.dataset_path
-            if config.dataset_path is None
-            else os.path.expanduser(f"{config.dataset_path}/{config.env}.hdf5")
-        )
-        dataset = env.get_dataset(h5path=h5path)
+        h5path = os.path.expanduser(f"{config.dataset_path}/{config.env}.hdf5")
+        import h5py
+        with h5py.File(h5path, "r") as _f:
+            dataset = {k: _f[k][()] for k in _f.keys()}
 
     ##### corrupt
     attack_indexes = np.zeros(dataset["rewards"].shape)
     if config.corruption_mode != "none":
         dataset, indexes = attack_dataset(config, dataset, logger)
         attack_indexes[indexes] = 1.0
-    dataset = d4rl.qlearning_dataset(env, dataset, terminate_on_end=True)
+    dataset = qlearning_dataset(dataset)
 
     if config.normalize_reward:
         modify_reward(dataset, config.env)
@@ -971,8 +962,8 @@ def test(config: TrainConfig, logger: Logger):
     else:
         state_mean, state_std = 0.0, 1.0
 
-    logger.info("state mean: ", state_mean)
-    logger.info("state std: ", state_std)
+    logger.info(f"state mean: {state_mean}")
+    logger.info(f"state std: {state_std}")
 
     dataset["observations"] = normalize_states(
         dataset["observations"], state_mean, state_std
@@ -981,13 +972,14 @@ def test(config: TrainConfig, logger: Logger):
         dataset["next_observations"], state_mean, state_std
     )
 
+    gym_key = config.env.split("-")[0]
+    env = gymnasium.make(GYM_ENV_ID[gym_key])
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
-    env.seed(config.seed)
 
     actor = DeterministicPolicy(
         state_dim, action_dim, max_action, config.hidden_dim, config.n_hidden, config.actor_dropout
     ).to(config.device)
-    actor.load_state_dict(torch.load(os.path.join(config.checkpoint_dir, "1000.pt"))["actor"])
+    actor.load_state_dict(torch.load(os.path.join(config.checkpoint_dir, "1000.pt"), map_location=config.device, weights_only=False)["actor"])
     actor.eval()
     logger.info(f"Actor Network: \n{str(actor)}")
 

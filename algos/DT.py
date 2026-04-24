@@ -9,8 +9,11 @@ from typing import Optional, Tuple
 import traceback
 import time
 import json
-import d4rl  # noqa
-import gym
+try:
+    import d4rl  # noqa
+except ImportError:
+    pass
+import gymnasium
 import numpy as np
 import pyrallis
 import torch
@@ -23,6 +26,18 @@ from tqdm.auto import trange  # noqa
 from dataclasses import dataclass
 from utils.logger import init_logger, Logger
 from utils.attack import Evaluation_Attacker
+
+GYM_ENV_ID = {
+    "walker2d":    "Walker2d-v4",
+    "hopper":      "Hopper-v4",
+    "halfcheetah": "HalfCheetah-v4",
+}
+
+ENV_DIMS = {
+    "walker2d-medium-replay-v2":    {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "hopper-medium-replay-v2":      {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
+    "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+}
 
 
 @dataclass
@@ -142,10 +157,11 @@ class TrainConfig:
             if self.corruption_obs > 0: corruption_tag += "obs_"
             if self.corruption_act > 0: corruption_tag += "act_"
             if self.corruption_rew > 0: corruption_tag += "rew_"
-            for file_name in os.listdir(os.path.join(self.logdir, self.group, self.env)):
-                if f"{corruption_tag}{self.seed}_" in file_name:
-                    self.checkpoint_dir = os.path.join(self.logdir, self.group, self.env, file_name)
-                    break
+            if self.checkpoint_dir is None:
+                for file_name in os.listdir(os.path.join(self.logdir, self.group, self.env)):
+                    if f"{corruption_tag}{self.seed}_" in file_name:
+                        self.checkpoint_dir = os.path.join(self.logdir, self.group, self.env, file_name)
+                        break
             with open(os.path.join(self.checkpoint_dir, "params.json"), "r") as f:
                 config = json.load(f)
             unoverwritten_keys = ["n_episodes", "checkpoint_dir"]
@@ -183,27 +199,16 @@ def train(config: TrainConfig, logger: Logger):
     if config.use_wandb:
         func.wandb_init(config)
 
-    env = gym.make(config.env)
-    config.state_dim = env.observation_space.shape[0]
-    config.action_dim = env.action_space.shape[0]
-    config.max_action = float(env.action_space.high[0])
-    config.action_range = [
-            float(env.action_space.low.min()) + 1e-6,
-            float(env.action_space.high.max()) - 1e-6,
-    ]
+    dims = ENV_DIMS[config.env]
+    config.state_dim = dims["state_dim"]
+    config.action_dim = dims["action_dim"]
+    config.max_action = dims["max_action"]
+    config.action_range = [-config.max_action + 1e-6, config.max_action - 1e-6]
 
     # data & dataloader setup
     dataset = dt_func.SequenceDataset(config, logger)
     logger.info(f"Dataset: {len(dataset.dataset)} trajectories")
     logger.info(f"State mean: {dataset.state_mean}, std: {dataset.state_std}")
-
-    env = func.wrap_env(
-        env,
-        state_mean=dataset.state_mean,
-        state_std=dataset.state_std,
-        reward_scale=config.reward_scale,
-    )
-    env.seed(config.seed)
 
     # model
     model = set_model(config)
@@ -222,18 +227,7 @@ def train(config: TrainConfig, logger: Logger):
         lambda steps: min((steps + 1) / config.warmup_steps, 1),
     )
 
-    model.eval()
-    eval_log = dt_func.eval_fn(config, env, model)
-    model.train()
-    logger.record("epoch", 0)
-    for k, v in eval_log.items():
-        logger.record(k, v)
-    logger.dump(0)
-    if config.use_wandb:
-        wandb.log({"epoch": 0, **eval_log})
-
     total_updates = 0
-    best_reward = -np.inf
     # trainloader_iter = iter(trainloader)
     for epoch in trange(1, config.num_epochs + 1, desc="Training"):
         time_start = time.time()
@@ -271,35 +265,16 @@ def train(config: TrainConfig, logger: Logger):
         time_end = time.time()
         epoch_time = time_end - time_start
 
-        # validation in the env for the actual online performance
-        if epoch % config.eval_every == 0:  #  or epoch == config.num_epochs - 1:
-            model.eval()
-            eval_log = dt_func.eval_fn(config, env, model)
-            model.train()
+        if epoch % config.eval_every == 0:
             logger.record("epoch", epoch)
             logger.record("epoch_time", epoch_time)
-            for k, v in eval_log.items():
-                logger.record(k, v)
             for k, v in log_dict.items():
                 logger.record(f"update/{k}", v)
             logger.record("update/gradient_step", total_updates)
             logger.dump(epoch)
-
             if config.use_wandb:
                 update_log = {f"update/{k}": v for k, v in log_dict.items()}
                 wandb.log({"epoch": epoch, **update_log})
-                wandb.log({"epoch": epoch, **eval_log})
-
-            now_reward = eval_log[f"eval/{config.target_returns[0]}_reward_mean"]
-            if config.save_model and now_reward > best_reward:
-                best_reward = now_reward
-                torch.save(
-                    model.state_dict(),
-                    os.path.join(logger.get_dir(), f"policy_best.pth"),
-                )
-                logger.info(
-                    f"Save policy on epoch {epoch} for best reward {best_reward}."
-                )
 
         if config.save_model and epoch % 50 == 0:
             torch.save(
@@ -313,31 +288,29 @@ def test(config: TrainConfig, logger: Logger):
     # Set seeds
     func.set_seed(config.seed)
 
-    env = gym.make(config.env)
-    config.state_dim = env.observation_space.shape[0]
-    config.action_dim = env.action_space.shape[0]
-    config.max_action = float(env.action_space.high[0])
-    config.action_range = [
-            float(env.action_space.low.min()) + 1e-6,
-            float(env.action_space.high.max()) - 1e-6,
-    ]
+    dims = ENV_DIMS[config.env]
+    config.state_dim = dims["state_dim"]
+    config.action_dim = dims["action_dim"]
+    config.max_action = dims["max_action"]
+    config.action_range = [-config.max_action + 1e-6, config.max_action - 1e-6]
 
     # data & dataloader setup
     dataset = dt_func.SequenceDataset(config, logger)
     logger.info(f"Dataset: {len(dataset.dataset)} trajectories")
     logger.info(f"State mean: {dataset.state_mean}, std: {dataset.state_std}")
 
+    gym_key = config.env.split("-")[0]
+    env = gymnasium.make(GYM_ENV_ID[gym_key])
     env = func.wrap_env(
         env,
         state_mean=dataset.state_mean,
         state_std=dataset.state_std,
         reward_scale=config.reward_scale,
     )
-    env.seed(config.seed)
 
     # model
     model = set_model(config)
-    model.load_state_dict(torch.load(os.path.join(config.checkpoint_dir, "100.pt")))
+    model.load_state_dict(torch.load(os.path.join(config.checkpoint_dir, "100.pt"), map_location=config.device, weights_only=False))
     model.eval()
     logger.info(f"Network: \n{str(model)}")
     logger.info(f"Total parameters: {sum(p.numel() for p in model.parameters())}")

@@ -2,7 +2,7 @@ import os, sys
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from typing import Any, Dict, Union, Tuple, Optional
-import gym
+import gymnasium as gym
 import uuid
 import wandb
 import random
@@ -62,25 +62,19 @@ def wrap_env(
     state_std: Union[np.ndarray, float] = 1.0,
     reward_scale: float = 1.0,
 ) -> gym.Env:
-    # PEP 8: E731 do not assign a lambda expression, use a def
-    def normalize_state(state):
-        return (
-            state - state_mean
-        ) / state_std  # epsilon should be already added in std.
-
-    def scale_reward(reward):
-        # Please be careful, here reward is multiplied by scale!
-        return reward_scale * reward
-
-    env = gym.wrappers.TransformObservation(env, normalize_state)
-    if reward_scale != 1.0:
-        env = gym.wrappers.TransformReward(env, scale_reward)
-    return env
+    _mean, _std, _scale = state_mean, state_std, reward_scale
+    class _NormEnv(gym.Wrapper):
+        def reset(self, **kwargs):
+            obs, info = self.env.reset(**kwargs)
+            return (obs - _mean) / _std, info
+        def step(self, action):
+            obs, reward, terminated, truncated, info = self.env.step(action)
+            return (obs - _mean) / _std, reward * _scale, terminated, truncated, info
+    return _NormEnv(env)
 
 
 def set_seed(seed: int, env: Optional[gym.Env] = None):
     if env is not None:
-        env.seed(seed)
         env.action_space.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
@@ -98,17 +92,20 @@ def set_seed(seed: int, env: Optional[gym.Env] = None):
 def eval_actor(
     env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int, attacker: Evaluation_Attacker = None
 ) -> np.ndarray:
-    env.seed(seed)
     actor.eval()
     episode_rewards = []
-    for _ in range(n_episodes):
-        state, done = env.reset(), False
+    for ep in range(n_episodes):
+        reset_result = env.reset(seed=seed + ep) if ep == 0 else env.reset()
+        state = reset_result[0] if isinstance(reset_result, tuple) else reset_result
         if attacker is not None:
             state = attacker.attack_obs(state)
+        done = False
         episode_reward = 0.0
         while not done:
             action = actor.act(state, device)
-            state, reward, done, _ = env.step(action)
+            step_result = env.step(action)
+            state, reward = step_result[0], step_result[1]
+            done = (step_result[2] or step_result[3]) if len(step_result) == 5 else step_result[2]
             if attacker is not None:
                 state = attacker.attack_obs(state)
             episode_reward += reward
@@ -119,6 +116,7 @@ def eval_actor(
 
 
 def eval(config, env, actor, attacker=None):
+    from dt_functions import get_normalized_score as _get_norm_score
     eval_scores = eval_actor(
         env,
         actor,
@@ -132,7 +130,7 @@ def eval(config, env, actor, attacker=None):
         "eval/reward_mean": np.mean(eval_returns),
         "eval/reward_std": np.std(eval_returns),
     }
-    normalized_score = env.get_normalized_score(eval_scores) * 100.0
+    normalized_score = _get_norm_score(config.env, eval_scores) * 100.0
     eval_log["eval/normalized_score_mean"] = np.mean(normalized_score)
     eval_log["eval/normalized_score_std"] = np.std(normalized_score)
     return eval_log
@@ -258,7 +256,9 @@ def load_clean_dataset(config):
             if config.dataset_path is None
             else os.path.expanduser(f"{config.dataset_path}/{config.env}.hdf5")
         )
-        dataset = gym.make(config.env).get_dataset(h5path=h5path)
+        import h5py
+        with h5py.File(h5path, "r") as f:
+            dataset = {k: f[k][()] for k in f.keys()}
     return dataset
 
 

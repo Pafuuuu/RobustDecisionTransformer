@@ -5,7 +5,6 @@ sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 from typing import Dict
 
 import copy
-import gym
 try:
     import d4rl
 except ImportError:
@@ -26,6 +25,12 @@ DATA_NAMSE = {
 
 MODEL_PATH = {
     "IQL": os.path.join(os.path.dirname(os.path.dirname(__file__)), "IQL_model"),
+}
+
+_ENV_DIMS = {
+    "walker2d-medium-replay-v2":    {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "hopper-medium-replay-v2":      {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
+    "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
 }
 
 
@@ -158,11 +163,10 @@ class Attack:
         self.attack_indexs = None
         self.original_indexs = None
 
-        env = gym.make(env_name)
-        self.state_dim = env.observation_space.shape[0]
-        self.action_dim = env.action_space.shape[0]
-        self.max_action = float(env.action_space.high[0])
-        env.close()
+        _dims = _ENV_DIMS[env_name]
+        self.state_dim = _dims["state_dim"]
+        self.action_dim = _dims["action_dim"]
+        self.max_action = _dims["max_action"]
 
     def set_attack_config(
         self,
@@ -192,7 +196,7 @@ class Attack:
 
     def load_model(self):
         model_path = os.path.join(self.model_path, self.env_name, "3000.pt")
-        state_dict = torch.load(model_path, map_location=self.device)
+        state_dict = torch.load(model_path, map_location=self.device, weights_only=False)
         if self.agent_name == "IQL":
             from algos.IQL import TwinQ
 
@@ -379,7 +383,7 @@ class Attack:
     def attack(self, dataset):
         dataset_path = os.path.join(self.new_dataset_path, self.new_dataset_file)
         if os.path.exists(dataset_path) and not self.froce_attack:
-            new_dataset = torch.load(dataset_path)
+            new_dataset = torch.load(dataset_path, weights_only=False)
             self.logger.info(f"Load new dataset from {dataset_path}")
             original_indexs, attack_indexs, attack_datas = (
                 new_dataset["original_indexs"],
