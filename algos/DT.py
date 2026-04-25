@@ -37,6 +37,8 @@ ENV_DIMS = {
     "walker2d-medium-replay-v2":    {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
     "hopper-medium-replay-v2":      {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
     "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "hopper-medium-v2":             {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
+    "halfcheetah-medium-v2":        {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
 }
 
 

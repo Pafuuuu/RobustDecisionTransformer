@@ -41,6 +41,8 @@ ENV_DIMS = {
     "walker2d-medium-replay-v2":    {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
     "hopper-medium-replay-v2":      {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
     "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "hopper-medium-v2":             {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
+    "halfcheetah-medium-v2":        {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
 }
 
 
@@ -169,7 +171,8 @@ class TrainConfig:
         if "medium-replay" in self.env and self.sample_ratio == 0.1:
             self.reward_coef = 1.0
             self.wmse_coef = (1.0, 1.0)
-            self.embedding_dropout = 0.2
+            if self.embedding_dropout is None:
+                self.embedding_dropout = 0.2
             if self.corruption_obs > 0.0:
                 self.correct_thershold = None
             if self.corruption_act > 0.0:
