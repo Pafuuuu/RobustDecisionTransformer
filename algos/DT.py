@@ -27,10 +27,17 @@ from dataclasses import dataclass
 from utils.logger import init_logger, Logger
 from utils.attack import Evaluation_Attacker
 
+try:
+    import gymnasium_robotics
+    gymnasium_robotics.register_robotics_envs()
+except ImportError:
+    pass
+
 GYM_ENV_ID = {
     "walker2d":    "Walker2d-v4",
     "hopper":      "Hopper-v4",
     "halfcheetah": "HalfCheetah-v4",
+    "antmaze":     "AntMaze_Medium-v4",
 }
 
 ENV_DIMS = {
@@ -39,6 +46,7 @@ ENV_DIMS = {
     "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
     "hopper-medium-v2":             {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
     "halfcheetah-medium-v2":        {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "antmaze-medium-play-v0":       {"state_dim": 29, "action_dim": 8, "max_action": 1.0},
 }
 
 
@@ -144,6 +152,8 @@ class TrainConfig:
                 self.sample_ratio = 0.1
             if "medium-v2" in self.env:
                 self.sample_ratio = 0.02
+            if self.env.startswith("antmaze"):
+                self.sample_ratio = 0.1
             key = self.env.split("-")[0]
             if key in ["door", "pen", "hammer", "relocate"]:
                 self.sample_ratio = 0.01
@@ -303,6 +313,16 @@ def test(config: TrainConfig, logger: Logger):
 
     gym_key = config.env.split("-")[0]
     env = gymnasium.make(GYM_ENV_ID[gym_key])
+    if config.env.startswith("antmaze"):
+        import numpy as _np
+        class _FlattenAntMaze(gymnasium.Wrapper):
+            def reset(self, **kwargs):
+                d, info = self.env.reset(**kwargs)
+                return _np.concatenate([d['observation'], d['desired_goal']]), info
+            def step(self, action):
+                d, reward, term, trunc, info = self.env.step(action)
+                return _np.concatenate([d['observation'], d['desired_goal']]), reward, term, trunc, info
+        env = _FlattenAntMaze(env)
     env = func.wrap_env(
         env,
         state_mean=dataset.state_mean,

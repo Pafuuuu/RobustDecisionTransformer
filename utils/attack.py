@@ -33,6 +33,7 @@ _ENV_DIMS = {
     "halfcheetah-medium-replay-v2": {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
     "hopper-medium-v2":             {"state_dim": 11, "action_dim": 3, "max_action": 1.0},
     "halfcheetah-medium-v2":        {"state_dim": 17, "action_dim": 6, "max_action": 1.0},
+    "antmaze-medium-play-v0":       {"state_dim": 29, "action_dim": 8, "max_action": 1.0},
 }
 
 
@@ -177,24 +178,30 @@ class Attack:
         corruption_rate,
         corruption_range,
         corruption_random,
+        corruption_block=False,
     ):
         self.corruption_tag = DATA_NAMSE[corruption_tag]
         self.corruption_rate = corruption_rate
         self.corruption_range = corruption_range
         self.corruption_random = corruption_random
+        self.corruption_block = corruption_block
         self.new_dataset_path = os.path.expanduser(
             os.path.join(self.dataset_path, "log_attack_data", self.env_name)
         )
-        self.new_dataset_file = (
-            f"random_{self.seed}{corruption_name}.pth"
-            if self.corruption_random
-            else f"{self.agent_name}_adversarial{corruption_name}.pth"
-        )
+        if corruption_block:
+            self.new_dataset_file = f"block_{self.seed}{corruption_name}.pth"
+        elif self.corruption_random:
+            self.new_dataset_file = f"random_{self.seed}{corruption_name}.pth"
+        else:
+            self.new_dataset_file = f"{self.agent_name}_adversarial{corruption_name}.pth"
 
         self.corrupt_func = getattr(self, f"corrupt_{corruption_tag}")
         self.loss_Q = getattr(self, f"loss_Q_for_{corruption_tag}")
         if self.attack_indexs is None or not self.same_index:
-            self.attack_indexs, self.original_indexs = self.sample_indexs()
+            if corruption_block:
+                self.attack_indexs, self.original_indexs = self.sample_indexs_block()
+            else:
+                self.attack_indexs, self.original_indexs = self.sample_indexs()
 
     def load_model(self):
         model_path = os.path.join(self.model_path, self.env_name, "3000.pt")
@@ -247,6 +254,30 @@ class Attack:
         attacked = np.where(random_num < self.corruption_rate)[0]
         original = np.where(random_num >= self.corruption_rate)[0]
         return indexs[attacked], indexs[original]
+
+    def sample_indexs_block(self):
+        """Select one contiguous block per trajectory covering corruption_rate fraction of it."""
+        terminals = self.dataset.get("terminals", np.zeros(len(self.dataset["rewards"]), dtype=bool))
+        timeouts = self.dataset.get("timeouts", np.zeros(len(self.dataset["rewards"]), dtype=bool))
+        n = len(self.dataset["rewards"])
+
+        attacked, original = [], []
+        traj_start = 0
+        for i in range(n):
+            is_end = bool(terminals[i]) or bool(timeouts[i]) or (i == n - 1)
+            if is_end:
+                traj_len = i + 1 - traj_start
+                block_size = max(1, int(round(traj_len * self.corruption_rate)))
+                block_start = self._np_rng.randint(0, traj_len - block_size + 1)
+                block_idx = np.arange(traj_start + block_start, traj_start + block_start + block_size)
+                mask = np.ones(traj_len, dtype=bool)
+                mask[block_start:block_start + block_size] = False
+                orig_idx = np.arange(traj_start, i + 1)[mask]
+                attacked.append(block_idx)
+                original.append(orig_idx)
+                traj_start = i + 1
+
+        return np.concatenate(attacked).astype(np.int64), np.concatenate(original).astype(np.int64)
 
     def sample_para(self, data, std):
         return (
@@ -416,9 +447,11 @@ def attack_dataset(config, dataset, logger):
         logger=logger,
     )
     corruption_random = config.corruption_mode == "random"
+    corruption_block = config.corruption_mode == "block"
     attack_params = {
         "corruption_rate": config.corruption_rate,
-        "corruption_random": corruption_random,
+        "corruption_random": corruption_random or corruption_block,  # block uses random noise
+        "corruption_block": corruption_block,
     }
     name = ""
     if config.sample_ratio < 1:

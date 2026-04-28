@@ -763,6 +763,8 @@ def init_logger(config):
             corrupt_tag = "rnd"
         elif config.corruption_mode == "adversarial":
             corrupt_tag = "adv"
+        elif config.corruption_mode == "block":
+            corrupt_tag = "blk"
         else:
             corrupt_tag = "none"
         if config.corruption_obs > 0:

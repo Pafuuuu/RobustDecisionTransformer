@@ -133,3 +133,5 @@ figure*
 wandb*
 .vscode
 datasets/
+CLAUDE.md
+.claude/
