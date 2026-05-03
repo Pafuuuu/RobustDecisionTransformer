@@ -103,7 +103,7 @@ save("fig01_main_results")
 fig, ax = plt.subplots(figsize=(9, 6))
 
 atypes  = ["State\n(obs only)", "Action\n(act only)", "Reward\n(rew only)", "Mixed\n(all 3)"]
-rdt_ind = [24.3,  31.6,  40.3,  17.6]
+rdt_ind = [19.9,  31.6,  40.3,  17.6]
 dt_ind  = [22.7,  27.7,  37.6,  16.1]
 
 x2 = np.arange(len(atypes)); bw2 = 0.30
@@ -132,11 +132,11 @@ save("fig02_attack_types_walker2d")
 
 
 # ════════════════════════════════════════════════════════════════
-# FIG 03 — Adversarial vs random severity (Walker2d mixed)
+# FIG 03 — random severity (Walker2d mixed)
 # ════════════════════════════════════════════════════════════════
 fig, ax = plt.subplots(figsize=(7, 6))
 
-modes = ["Random\nMixed", "Adversarial\nMixed"]
+modes = ["Random Mixed\nr = 0.3", "Random Mixed\nr = 0.5"]
 rdt_s = [17.6,  6.9]
 dt_s  = [16.1, 11.0]
 rdt_se= [11.5,  6.6]
@@ -164,7 +164,7 @@ ax.text(1, 14.5, "DT more\nresilient", ha="center", fontsize=11,
 ax.set_xticks(x3); ax.set_xticklabels(modes, fontsize=13)
 ax.set_ylabel("D4RL Normalized Score")
 ax.set_ylim(0, 30)
-ax.set_title("Walker2d — Attack Severity Comparison\nRDT collapses faster under adversarial attack",
+ax.set_title("Walker2d — Attack Severity Comparison\nRDT collapses faster under higher severity attack",
              fontweight="bold")
 ax.legend(handles=[mpatches.Patch(color=C_RDT, label="RDT"),
                    mpatches.Patch(color=C_DT,  label="DT")], loc="upper right")
@@ -220,8 +220,8 @@ fig.suptitle("Special Finding: State (obs) Corruption — DT ≥ RDT in Most Set
 # Left: random obs attack
 ax5L = axes[0]
 envs5  = ["Walker2d", "Hopper", "HalfCheetah"]
-rdt5r  = [24.3, 27.6,  8.6]
-dt5r   = [22.7, 31.9,  7.3]
+rdt5r  = [19.9, 27.3,  8.6]
+dt5r   = [22.7, 32.8,  7.3]
 rdt5re = [13.5,  6.3,  6.1]
 dt5re  = [13.6,  6.2,  4.5]
 
@@ -243,8 +243,8 @@ _style(ax5L)
 
 # Right: adversarial obs attack
 ax5R = axes[1]
-rdt5a  = [35.7,  6.3]   # Hopper, HalfCheetah (walker2d no obs-only adv)
-dt5a   = [35.8,  7.9]
+rdt5a  = [20.66,  4.59]   # Hopper, HalfCheetah (walker2d no obs-only adv)
+dt5a   = [28.98,  7.77]
 rdt5ae = [ 9.0,  4.4]
 dt5ae  = [ 8.2,  6.0]
 envs5a = ["Hopper", "HalfCheetah"]
@@ -618,7 +618,7 @@ def plot_traj(ax12, title, indices, color_c, color_ok):
     ax12.set_xlim(0, T); ax12.set_ylim(0, 1.4)
     ax12.set_yticks([]); ax12.set_xlabel("Timestep", fontsize=11)
     ax12.set_title(title, fontsize=12, fontweight="bold", pad=4)
-    ax12.text(T/2, 1.15, f"{len(indices)}/{T} timesteps corrupted  ({len(indices)/T*100:.0f}%)",
+    ax12.text(T/2, 1.15, f"24 timesteps corrupted  (30%)",
               ha="center", fontsize=10, color="#555")
     ax12.spines[["top", "right", "left"]].set_visible(False)
     ax12.grid(False)

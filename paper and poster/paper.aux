@@ -1,0 +1,81 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{xu2025rdt}
+\citation{chen2021dt}
+\citation{kumar2020cql}
+\citation{ye2024uwmsg}
+\citation{yang2024riql}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{What we did and why.}{1}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Summary of findings.}{1}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Background and Methodology}{1}{section.2}\protected@file@percent }
+\newlabel{sec:bg}{{2}{1}{Background and Methodology}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Decision Transformer and RDT}{1}{subsection.2.1}\protected@file@percent }
+\citation{xu2025rdt}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Datasets and corruption protocols}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Replication of the Original Claims}{2}{section.3}\protected@file@percent }
+\newlabel{sec:claims}{{3}{2}{Replication of the Original Claims}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Claim 1: DT $>$ TD-based methods}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Random vs.\ block corruption pattern. Both inject noise into the same fraction $\rho $ of transitions but block corruption concentrates that noise in contiguous windows, mimicking sensor outages or burst failures more closely than i.i.d.\ noise.\relax }}{2}{figure.caption.4}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:blockpat}{{1}{2}{Random vs.\ block corruption pattern. Both inject noise into the same fraction $\rho $ of transitions but block corruption concentrates that noise in contiguous windows, mimicking sensor outages or burst failures more closely than i.i.d.\ noise.\relax }{figure.caption.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Main replication on Walker2d-medium-replay-v2 under mixed random corruption ($\rho =0.3$). Sequence-modeling methods (RDT, DT) clearly outperform the TD-based baseline RIQL, replicating Claim\nobreakspace  {}1. RDT only narrowly beats DT, partially supporting Claim\nobreakspace  {}2.\relax }}{2}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:main}{{2}{2}{Main replication on Walker2d-medium-replay-v2 under mixed random corruption ($\rho =0.3$). Sequence-modeling methods (RDT, DT) clearly outperform the TD-based baseline RIQL, replicating Claim~1. RDT only narrowly beats DT, partially supporting Claim~2.\relax }{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Claim 2: RDT $>$ DT under random and adversarial corruption}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Walker2d, $\rho =0.3$, random corruption, broken down by which component is corrupted. RDT improves on DT under action and reward corruption, ties under mixed, and \emph  {loses} under state-only corruption.\relax }}{3}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:attacktypes}{{3}{3}{Walker2d, $\rho =0.3$, random corruption, broken down by which component is corrupted. RDT improves on DT under action and reward corruption, ties under mixed, and \emph {loses} under state-only corruption.\relax }{figure.caption.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces State-attack anomaly across environments. The DT-minus-RDT margin is negative in 4/5 locomotion environment we tested when the attack is restricted to the observation channel.\relax }}{3}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:stateanom}{{4}{3}{State-attack anomaly across environments. The DT-minus-RDT margin is negative in 4/5 locomotion environment we tested when the attack is restricted to the observation channel.\relax }{figure.caption.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Hypothesis-Driven Ablations}{3}{section.4}\protected@file@percent }
+\newlabel{sec:ablations}{{4}{3}{Hypothesis-Driven Ablations}{section.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Full per-condition comparison. RDT consistently helps under non-state attacks but consistently hurts under state-only and adversarial attacks.\relax }}{3}{table.caption.8}\protected@file@percent }
+\newlabel{tab:fullresults}{{1}{3}{Full per-condition comparison. RDT consistently helps under non-state attacks but consistently hurts under state-only and adversarial attacks.\relax }{table.caption.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Walker2d, random, $\rho =0.3$. Removing dropout slightly hurts (consistent with the paper); removing wMSE or correction \emph  {helps}. This contradicts the claim that all three modules contribute monotonically.\relax }}{3}{table.caption.9}\protected@file@percent }
+\newlabel{tab:ablation}{{2}{3}{Walker2d, random, $\rho =0.3$. Removing dropout slightly hurts (consistent with the paper); removing wMSE or correction \emph {helps}. This contradicts the claim that all three modules contribute monotonically.\relax }{table.caption.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Stress Tests}{3}{section.5}\protected@file@percent }
+\newlabel{sec:stress}{{5}{3}{Stress Tests}{section.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{Higher severity ($\rho =0.5$).}{3}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Block corruption.}{3}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{New environment (AntMaze).}{3}{section*.14}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Random vs.\ adversarial corruption at standard ($\rho =0.3$) and high ($\rho =0.5$) severity. RDT does not preserve its margin over DT as severity rises.\relax }}{4}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:advsev}{{5}{4}{Random vs.\ adversarial corruption at standard ($\rho =0.3$) and high ($\rho =0.5$) severity. RDT does not preserve its margin over DT as severity rises.\relax }{figure.caption.11}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Discussion}{4}{section.6}\protected@file@percent }
+\newlabel{sec:discussion}{{6}{4}{Discussion}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Engineering challenges}{4}{subsection.6.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Block vs.\ random corruption, identical $\rho $. Both DT and RDT benefit from corruption being concentrated in contiguous windows.\relax }}{4}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:blockvsrand}{{6}{4}{Block vs.\ random corruption, identical $\rho $. Both DT and RDT benefit from corruption being concentrated in contiguous windows.\relax }{figure.caption.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces AntMaze-medium-play-v0 stress test. RDT collapses to a random-walk policy (\textbf  {0.0}) while vanilla DT, lacking the correction module, reaches \textbf  {12.0}.\relax }}{4}{figure.caption.15}\protected@file@percent }
+\newlabel{fig:antmaze}{{7}{4}{AntMaze-medium-play-v0 stress test. RDT collapses to a random-walk policy (\textbf {0.0}) while vanilla DT, lacking the correction module, reaches \textbf {12.0}.\relax }{figure.caption.15}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Why RDT $<$ DT under state-only attacks}{4}{subsection.6.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Heatmap of (RDT $-$ DT) advantage across all conditions in our study. Blue indicates RDT helps, red indicates RDT hurts. RDT consistently helps under action and reward attacks but hurts under state-only and sparse-reward conditions.\relax }}{5}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:heatmap}{{8}{5}{Heatmap of (RDT $-$ DT) advantage across all conditions in our study. Blue indicates RDT helps, red indicates RDT hurts. RDT consistently helps under action and reward attacks but hurts under state-only and sparse-reward conditions.\relax }{figure.caption.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Why block corruption is easier than random corruption}{5}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Why RDT collapses on AntMaze}{5}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Limitations and Future Work}{5}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusion}{5}{section.8}\protected@file@percent }
+\bibcite{xu2025rdt}{1}
+\bibcite{chen2021dt}{2}
+\bibcite{kumar2020cql}{3}
+\bibcite{ye2024uwmsg}{4}
+\bibcite{yang2024riql}{5}
+\bibcite{fu2020d4rl}{6}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Claim-by-claim summary of our replication. Claim\nobreakspace  {}1 fully holds; Claim\nobreakspace  {}2 holds partially; Claim\nobreakspace  {}3 does not hold under our stress tests.\relax }}{6}{figure.caption.17}\protected@file@percent }
+\newlabel{fig:claimsumm}{{9}{6}{Claim-by-claim summary of our replication. Claim~1 fully holds; Claim~2 holds partially; Claim~3 does not hold under our stress tests.\relax }{figure.caption.17}{}}
+\gdef \@abspage@last{6}
